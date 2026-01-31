@@ -60,6 +60,8 @@ export default function App() {
   const [view, setView] = useState<'write' | 'read'>('write');
   const [readContent, setReadContent] = useState('');
   const [readError, setReadError] = useState(false);
+  const [readErrorTitle, setReadErrorTitle] = useState('Unavailable');
+  const [readErrorMessage, setReadErrorMessage] = useState('This page has been torn out.');
   const [readPlaceholder, setReadPlaceholder] = useState('Unsealing memo...');
   const [isSharing, setIsSharing] = useState(false);
   const [lastSharedId, setLastSharedId] = useState<string | null>(null);
@@ -202,14 +204,35 @@ export default function App() {
   const fetchAndDecrypt = useCallback(async (id: string, key: string) => {
     setReadContent('');
     setReadError(false);
+    setReadErrorTitle('Unavailable');
+    setReadErrorMessage('This page has been torn out.');
     setReadPlaceholder('Unsealing memo...');
     try {
       const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error('Memo missing');
+      if (!res.ok) {
+        let errorText = '';
+        try {
+          const body = await res.json();
+          errorText = typeof body?.error === 'string' ? body.error : '';
+        } catch {
+          errorText = '';
+        }
+        if (res.status === 404 && /expired/i.test(errorText)) {
+          setReadErrorTitle('Expired');
+          setReadErrorMessage('This memo has expired.');
+        } else {
+          setReadErrorTitle('Unavailable');
+          setReadErrorMessage('This page has been torn out.');
+        }
+        setReadError(true);
+        return;
+      }
       const data = await res.json();
       const text = await decryptPayload(data, key);
       setReadContent(text);
     } catch {
+      setReadErrorTitle('Unavailable');
+      setReadErrorMessage('This page has been torn out.');
       setReadError(true);
     }
   }, []);
@@ -288,6 +311,7 @@ export default function App() {
       console.warn('Share blocked: memo too long');
       return;
     }
+    handleSave();
     const apiOk = await checkApiHealth();
     if (!apiOk) {
       console.warn('Share blocked: API unavailable');
@@ -341,10 +365,14 @@ export default function App() {
 
         setGeneratedId(candidateId);
         setKeyString(candidateKey);
-        await copyToClipboard(buildShareLink(candidateId, candidateKey));
+        const link = buildShareLink(candidateId, candidateKey);
+        await copyToClipboard(link);
         setLastSharedId(candidateId);
         setShareStatus('active');
         setShareExpiresAt(Date.now() + TTL_MS);
+        if (typeof window !== 'undefined') {
+          window.history.replaceState(null, '', `/${candidateId}#${candidateKey}`);
+        }
         return;
       }
 
@@ -428,6 +456,8 @@ export default function App() {
               themeClasses={themeClasses}
               readContent={readContent}
               readError={readError}
+              readErrorTitle={readErrorTitle}
+              readErrorMessage={readErrorMessage}
               readPlaceholder={readPlaceholder}
               onWriteNew={() => (window.location.href = '/')}
             />

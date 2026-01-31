@@ -4,6 +4,8 @@ type Props = {
   themeClasses: ThemeClasses;
   readContent: string;
   readError: boolean;
+  readErrorTitle: string;
+  readErrorMessage: string;
   readPlaceholder: string;
   onWriteNew: () => void;
 };
@@ -12,6 +14,8 @@ export default function MemoViewer({
   themeClasses,
   readContent,
   readError,
+  readErrorTitle,
+  readErrorMessage,
   readPlaceholder,
   onWriteNew,
 }: Props) {
@@ -44,8 +48,8 @@ export default function MemoViewer({
             id="read-error"
             className="flex min-h-56 flex-col items-center justify-center gap-2 px-8 py-2 text-center text-sm text-orange-400"
           >
-            <h3 className="text-base font-semibold">Unavailable</h3>
-            <p>This page has been torn out.</p>
+            <h3 className="text-base font-semibold">{readErrorTitle}</h3>
+            <p>{readErrorMessage}</p>
           </div>
         )}
       </div>
