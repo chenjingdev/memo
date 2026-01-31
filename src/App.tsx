@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import Header from './components/Header';
 import MemoEditor from './components/MemoEditor';
 import MemoViewer from './components/MemoViewer';
@@ -440,7 +441,7 @@ export default function App() {
         <main id="app" className="flex min-h-0 flex-1 flex-col">
           <section
             id="view-write"
-            className={`${view === 'write' ? 'flex' : 'hidden'} relative min-h-0 flex-1 flex-col gap-5`}
+            className={`${view === 'write' ? 'flex' : 'hidden'} relative min-h-0 flex-1 flex-col`}
           >
             <SharePanel
               themeClasses={themeClasses}
@@ -487,6 +488,14 @@ export default function App() {
             />
           ) : null}
         </main>
+        <footer className="mt-8 pb-4 text-center">
+          <p className={`flex items-center justify-center gap-1.5 text-sm opacity-60 ${themeClasses.brand}`}>
+            <ShieldCheck size={14} className="opacity-80" />
+            <span>
+              End-to-End Encrypted. The server cannot read your data.
+            </span>
+          </p>
+        </footer>
       </div>
     </div>
   );

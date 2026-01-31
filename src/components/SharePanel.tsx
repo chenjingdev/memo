@@ -44,21 +44,21 @@ export default function SharePanel({
     shareStatus === 'active'
       ? themeClasses.statusActive
       : shareStatus === 'expired'
-      ? themeClasses.statusExpired
-      : shareStatus === 'error'
-      ? themeClasses.statusError
-      : themeClasses.statusIdle;
+        ? themeClasses.statusExpired
+        : shareStatus === 'error'
+          ? themeClasses.statusError
+          : themeClasses.statusIdle;
 
   return (
     <div
       className={`rounded-xl border border-black/5 p-5 shadow-sm transition ${themeClasses.panelBg} ${themeClasses.panelText}`}
     >
-      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <div className="flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-neutral-500">
         <label>Share Link (Link ID)</label>
         <div className="flex items-center gap-3">
           <button
             id="btn-save"
-            className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40`}
+            className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
             title="Save"
             onClick={onSave}
             disabled={!isDirty}
@@ -67,7 +67,7 @@ export default function SharePanel({
           </button>
           <button
             id="btn-share"
-            className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40`}
+            className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
             title="Share"
             onClick={onShare}
             disabled={isSharing || shareStatus === 'active'}
@@ -76,7 +76,7 @@ export default function SharePanel({
           </button>
           <button
             id="btn-refresh"
-            className={`inline-flex items-center justify-center transition ${themeClasses.accent} hover:rotate-180`}
+            className={`inline-flex cursor-pointer items-center justify-center transition ${themeClasses.accent} hover:rotate-180`}
             title="Regenerate"
             onClick={onRefresh}
           >
@@ -95,14 +95,14 @@ export default function SharePanel({
           readOnly
         />
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-ui text-neutral-500">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-ui text-neutral-500">
         <span>Status:</span>
         {lastSharedId ? (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] uppercase ${statusPillClass}`}>
+          <span className={`rounded-full px-2 py-0.5 text-sm uppercase ${statusPillClass}`}>
             {shareStatus}
           </span>
         ) : (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] uppercase ${themeClasses.statusIdle}`}>
+          <span className={`rounded-full px-2 py-0.5 text-sm uppercase ${themeClasses.statusIdle}`}>
             Not shared
           </span>
         )}
@@ -113,6 +113,8 @@ export default function SharePanel({
           <span>TTL: {TTL_MINUTES} min</span>
         )}
       </div>
+
+
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
@@ -125,7 +127,7 @@ export default function SharePanel({
             min={KEY_MIN_LEN}
             max={KEY_MAX_LEN}
             value={idLength}
-            className={`w-32 ${themeClasses.accentInput}`}
+            className={`w-32 cursor-pointer ${themeClasses.accentInput}`}
             onChange={(e) => onIdLengthChange(Number(e.target.value))}
           />
         </div>
@@ -139,12 +141,12 @@ export default function SharePanel({
             min={KEY_MIN_LEN}
             max={KEY_MAX_LEN}
             value={keyLength}
-            className={`w-32 ${themeClasses.accentInput}`}
+            className={`w-32 cursor-pointer ${themeClasses.accentInput}`}
             onChange={(e) => onKeyLengthChange(Number(e.target.value))}
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="inline-flex items-center">
+          <label className="inline-flex cursor-pointer items-center">
             <input
               type="checkbox"
               id="opt-num"
@@ -153,16 +155,15 @@ export default function SharePanel({
               className="sr-only"
             />
             <span
-              className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                options.useNum
-                  ? `${themeClasses.accentBg} text-white border-transparent`
-                  : 'border-black/10 text-neutral-500'
-              }`}
+              className={`rounded-md border px-3 py-1 text-sm font-semibold transition ${options.useNum
+                ? `${themeClasses.accentBg} text-white border-transparent`
+                : 'border-black/10 text-neutral-500'
+                }`}
             >
               123
             </span>
           </label>
-          <label className="inline-flex items-center">
+          <label className="inline-flex cursor-pointer items-center">
             <input
               type="checkbox"
               id="opt-low"
@@ -171,16 +172,15 @@ export default function SharePanel({
               className="sr-only"
             />
             <span
-              className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                options.useLow
-                  ? `${themeClasses.accentBg} text-white border-transparent`
-                  : 'border-black/10 text-neutral-500'
-              }`}
+              className={`rounded-md border px-3 py-1 text-sm font-semibold transition ${options.useLow
+                ? `${themeClasses.accentBg} text-white border-transparent`
+                : 'border-black/10 text-neutral-500'
+                }`}
             >
               abc
             </span>
           </label>
-          <label className="inline-flex items-center">
+          <label className="inline-flex cursor-pointer items-center">
             <input
               type="checkbox"
               id="opt-up"
@@ -189,18 +189,17 @@ export default function SharePanel({
               className="sr-only"
             />
             <span
-              className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                options.useUp
-                  ? `${themeClasses.accentBg} text-white border-transparent`
-                  : 'border-black/10 text-neutral-500'
-              }`}
+              className={`rounded-md border px-3 py-1 text-sm font-semibold transition ${options.useUp
+                ? `${themeClasses.accentBg} text-white border-transparent`
+                : 'border-black/10 text-neutral-500'
+                }`}
             >
               ABC
             </span>
           </label>
         </div>
       </div>
-      <div className="mt-3 flex justify-end text-xs font-ui text-neutral-500">
+      <div className="mt-3 flex justify-end text-sm font-ui text-neutral-500">
         Limit: {MEMO_MAX_CHARS} chars
       </div>
     </div>

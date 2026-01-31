@@ -25,12 +25,12 @@ export default function MemoViewer({
       className="flex min-h-0 flex-1 flex-col gap-4"
     >
       <div
-        className={`relative max-h-[calc(100vh-260px)] overflow-hidden rounded-sm border border-black/5 shadow-lg ${themeClasses.paperBg} ${themeClasses.line} bg-[length:100%_2.4rem] bg-local ${themeClasses.marginLine} before:absolute before:inset-y-0 before:left-12 before:w-px before:content-['']`}
+        className={`relative overflow-hidden rounded-sm border border-black/5 shadow-lg ${themeClasses.paperBg} ${themeClasses.line} bg-[length:100%_2.4rem] bg-local ${themeClasses.marginLine} before:absolute before:inset-y-0 before:left-12 before:w-px before:content-['']`}
       >
         {!readError && readContent && (
           <div
             id="read-content"
-            className={`w-full min-h-56 max-h-[calc(100vh-260px)] whitespace-pre-wrap bg-transparent px-8 py-2 pl-16 font-body text-lg leading-10 ${themeClasses.text}`}
+            className={`w-full min-h-56 whitespace-pre-wrap bg-transparent px-8 py-2 pl-16 font-body text-lg leading-10 ${themeClasses.text}`}
           >
             {readContent}
           </div>
