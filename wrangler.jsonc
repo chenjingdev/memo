@@ -1,0 +1,28 @@
+{
+    "name": "memo-relay",
+    "main": "worker/index.js",
+    "compatibility_date": "2024-11-12",
+    "durable_objects": {
+        "bindings": [
+            {
+                "name": "MEMO_DO",
+                "class_name": "MemoRelayDO"
+            }
+        ]
+    },
+    "migrations": [
+        {
+            "tag": "v1",
+            "new_classes": [
+                "MemoRelayDO"
+            ]
+        }
+    ],
+    "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS"
+    },
+    "observability": {
+        "enabled": true
+    }
+}
