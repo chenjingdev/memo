@@ -184,15 +184,16 @@ export default {
         }
 
         if (env.ASSETS) {
+            const path = url.pathname;
+            const isSpaRoute = request.method === "GET" && path !== "/" && !path.includes(".");
+            if (isSpaRoute) {
+                const indexRequest = new Request(new URL("/index.html", url), request);
+                return env.ASSETS.fetch(indexRequest);
+            }
+
             const assetResponse = await env.ASSETS.fetch(request);
             if (assetResponse.status !== 404) {
                 return assetResponse;
-            }
-
-            const path = url.pathname;
-            if (path !== "/" && !path.includes(".")) {
-                const indexRequest = new Request(new URL("/index.html", url), request);
-                return env.ASSETS.fetch(indexRequest);
             }
 
             return assetResponse;
