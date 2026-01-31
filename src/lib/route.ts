@@ -22,5 +22,39 @@ export function parseRoute() {
     }
   }
 
+  if (!id && typeof document !== 'undefined' && document.referrer) {
+    try {
+      const ref = new URL(document.referrer);
+      if (ref.origin === window.location.origin) {
+        const refMatch = ref.pathname.match(/^\/([A-Za-z0-9]+)$/);
+        if (refMatch) id = refMatch[1];
+      }
+    } catch {
+      // ignore referrer parse failures
+    }
+  }
+
+  if (!id && key && typeof window !== 'undefined') {
+    try {
+      const raw = window.sessionStorage.getItem('memo-last-route');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data && data.key === key && typeof data.id === 'string') {
+          id = data.id;
+        }
+      }
+    } catch {
+      // ignore storage parse failures
+    }
+  }
+
+  if (id && key && typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem('memo-last-route', JSON.stringify({ id, key }));
+    } catch {
+      // ignore storage write failures
+    }
+  }
+
   return { id, key };
 }

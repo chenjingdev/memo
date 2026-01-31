@@ -188,7 +188,15 @@ export default {
             const isSpaRoute = request.method === "GET" && path !== "/" && !path.includes(".");
             if (isSpaRoute) {
                 const indexRequest = new Request(new URL("/index.html", url), request);
-                return env.ASSETS.fetch(indexRequest);
+                let indexResponse = await env.ASSETS.fetch(indexRequest);
+                if (indexResponse.status >= 300 && indexResponse.status < 400) {
+                    const location = indexResponse.headers.get("Location");
+                    if (location) {
+                        const followUrl = new URL(location, url);
+                        indexResponse = await env.ASSETS.fetch(new Request(followUrl, request));
+                    }
+                }
+                return indexResponse;
             }
 
             const assetResponse = await env.ASSETS.fetch(request);
