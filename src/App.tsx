@@ -194,12 +194,13 @@ export default function App() {
 
   useEffect(() => {
     if (view !== 'write') return;
-    const handle = window.setInterval(() => {
+    if (!isDirty) return;
+    const handle = window.setTimeout(() => {
       if (!isDirty) return;
       handleSave();
-    }, 30000);
-    return () => window.clearInterval(handle);
-  }, [handleSave, isDirty, view]);
+    }, 2000);
+    return () => window.clearTimeout(handle);
+  }, [memoText, handleSave, isDirty, view]);
 
   const fetchAndDecrypt = useCallback(async (id: string, key: string) => {
     setReadContent('');
@@ -496,15 +497,23 @@ async function copyToClipboard(text: string) {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
-    } else {
-      const temp = document.createElement('textarea');
-      temp.value = text;
-      document.body.appendChild(temp);
-      temp.select();
-      document.execCommand('copy');
-      temp.remove();
+      return true;
     }
-    return true;
+  } catch {
+    // fall back to execCommand
+  }
+  try {
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.position = 'absolute';
+    temp.style.left = '-9999px';
+    document.body.appendChild(temp);
+    temp.select();
+    temp.setSelectionRange(0, temp.value.length);
+    const ok = document.execCommand('copy');
+    temp.remove();
+    return ok;
   } catch {
     return false;
   }

@@ -22,7 +22,7 @@ export function parseRoute() {
     }
   }
 
-  if (!id && typeof document !== 'undefined' && document.referrer) {
+  if (!id && key && typeof document !== 'undefined' && document.referrer) {
     try {
       const ref = new URL(document.referrer);
       if (ref.origin === window.location.origin) {
