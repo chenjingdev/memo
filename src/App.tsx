@@ -220,6 +220,9 @@ export default function App() {
         if (res.status === 404 && /expired/i.test(errorText)) {
           setReadErrorTitle('Expired');
           setReadErrorMessage('This memo has expired.');
+        } else if (res.status === 404 && /destroyed/i.test(errorText)) {
+          setReadErrorTitle('Destroyed');
+          setReadErrorMessage('This memo has been destroyed.');
         } else {
           setReadErrorTitle('Unavailable');
           setReadErrorMessage('This page has been torn out.');
@@ -237,6 +240,21 @@ export default function App() {
     }
   }, []);
 
+  const resetShareState = useCallback(
+    (burnId?: string) => {
+      if (burnId) {
+        burnMemo(burnId);
+      }
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('memo-last-id');
+      }
+      setLastSharedId(null);
+      setShareExpiresAt(null);
+      setShareStatus('idle');
+    },
+    [setShareExpiresAt, setShareStatus]
+  );
+
   useEffect(() => {
     const handleRoute = () => {
       const pathname = window.location.pathname;
@@ -248,9 +266,7 @@ export default function App() {
       const { id, key } = parseRoute();
       const storedLastId = readString('memo-last-id', '');
       if (!id && storedLastId) {
-        burnMemo(storedLastId);
-        window.localStorage.removeItem('memo-last-id');
-        setLastSharedId(null);
+        resetShareState(storedLastId);
       }
       const routeKey = `${id ?? ''}#${key ?? ''}`;
       if (lastRouteRef.current === routeKey) {
@@ -258,6 +274,16 @@ export default function App() {
       }
       lastRouteRef.current = routeKey;
       if (id && key) {
+        if (isReloadNavigation()) {
+          setView('read');
+          setReadErrorTitle('Destroyed');
+          setReadErrorMessage('This memo has been destroyed.');
+          setReadError(true);
+          setReadContent('');
+          setReadPlaceholder('This page has been torn out.');
+          resetShareState(id);
+          return;
+        }
         setView('read');
         setReadError(false);
         setReadContent('');
@@ -284,7 +310,7 @@ export default function App() {
       window.removeEventListener('hashchange', handleRoute);
       window.removeEventListener('popstate', handleRoute);
     };
-  }, [fetchAndDecrypt]);
+  }, [fetchAndDecrypt, resetShareState]);
 
   const handleOptionToggle = (key: keyof IdOptions, value: boolean) => {
     const next = normalizeOptions({
@@ -300,6 +326,9 @@ export default function App() {
   const handleRefresh = () => {
     setGeneratedId(generateCustomId(idLength, { useNum, useLow, useUp }));
     setKeyString(generateKeyString(keyLength, { useNum, useLow, useUp }));
+    if (lastSharedId) {
+      resetShareState(lastSharedId);
+    }
   };
 
   const handleShare = async () => {
@@ -370,9 +399,6 @@ export default function App() {
         setLastSharedId(candidateId);
         setShareStatus('active');
         setShareExpiresAt(Date.now() + TTL_MS);
-        if (typeof window !== 'undefined') {
-          window.history.replaceState(null, '', `/${candidateId}#${candidateKey}`);
-        }
         return;
       }
 
@@ -394,9 +420,7 @@ export default function App() {
     const nextKey = generateKeyString(keyLength, { useNum, useLow, useUp });
     setGeneratedId(nextId);
     setKeyString(nextKey);
-    setLastSharedId(null);
-    setShareExpiresAt(null);
-    setShareStatus('idle');
+    resetShareState();
   }, [
     shareStatus,
     idLength,
@@ -404,8 +428,7 @@ export default function App() {
     useNum,
     useLow,
     useUp,
-    setShareExpiresAt,
-    setShareStatus,
+    resetShareState,
   ]);
 
   return (
@@ -492,6 +515,17 @@ function formatDuration(ms: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function isReloadNavigation() {
+  if (typeof performance === 'undefined') return false;
+  const entries = performance.getEntriesByType?.('navigation');
+  if (entries && entries.length > 0) {
+    const entry = entries[0] as PerformanceNavigationTiming;
+    return entry.type === 'reload';
+  }
+  const nav = (performance as Performance & { navigation?: { type?: number } }).navigation;
+  return nav?.type === 1;
 }
 
 async function checkApiHealth() {
