@@ -1,198 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCcw, Save, Share2 } from 'lucide-react';
-
-const API_BASE = '/api/memo';
-const ID_RE = /^[A-Za-z0-9]{4,32}$/;
-const KEY_MIN_LEN = 4;
-const KEY_MAX_LEN = 32;
-const KDF_ITERATIONS = 100000;
-const TTL_MINUTES = 30;
-const TTL_MS = TTL_MINUTES * 60 * 1000;
-const POLL_INTERVAL_MS = 5000;
-const MEMO_MAX_CHARS = 2000;
-
-type IdOptions = {
-  useNum: boolean;
-  useLow: boolean;
-  useUp: boolean;
-};
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function readNumber(key: string, fallback: number) {
-  if (typeof window === 'undefined') return fallback;
-  const raw = window.localStorage.getItem(key);
-  const value = Number.parseInt(raw || '', 10);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function readString(key: string, fallback: string) {
-  if (typeof window === 'undefined') return fallback;
-  const value = window.localStorage.getItem(key);
-  return value || fallback;
-}
-
-function readBool(key: string, fallback: boolean) {
-  if (typeof window === 'undefined') return fallback;
-  const value = window.localStorage.getItem(key);
-  if (value === null) return fallback;
-  return value === 'true';
-}
-
-function normalizeOptions(opts: IdOptions): IdOptions {
-  if (!opts.useNum && !opts.useLow && !opts.useUp) {
-    return { ...opts, useNum: true };
-  }
-  return opts;
-}
-
-function generateCustomId(len: number, opts: IdOptions) {
-  const { useNum, useLow, useUp } = normalizeOptions(opts);
-  let chars = '';
-  if (useNum) chars += '0123456789';
-  if (useLow) chars += 'abcdefghijklmnopqrstuvwxyz';
-  if (useUp) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  if (!chars) chars = '0123456789';
-
-  let result = '';
-  const random = new Uint8Array(len);
-  window.crypto.getRandomValues(random);
-  for (let i = 0; i < len; i += 1) {
-    result += chars[random[i] % chars.length];
-  }
-  return result;
-}
-
-function generateKeyString(len: number, opts: IdOptions) {
-  return generateCustomId(len, opts);
-}
-
-function normalizeKey(input: string) {
-  return (input || '').replace(/[^A-Za-z0-9]/g, '');
-}
-
-type GraphemeSegmenter = {
-  segment: (input: string) => Iterable<{ segment: string }>;
-};
-
-const graphemeSegmenter: GraphemeSegmenter | null = (() => {
-  if (typeof Intl === 'undefined') return null
-  const Segmenter = (Intl as { Segmenter?: new (...args: any[]) => GraphemeSegmenter }).Segmenter;
-  return Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;
-})();
-
-function getCharCount(value: string) {
-  if (!value) return 0;
-  if (!graphemeSegmenter) return Array.from(value).length;
-  let count = 0;
-  for (const _ of graphemeSegmenter.segment(value)) {
-    count += 1;
-  }
-  return count;
-}
-
-function clampTextByChars(value: string, maxChars: number) {
-  if (!value) return value;
-  if (!graphemeSegmenter) {
-    const chars = Array.from(value);
-    return chars.length <= maxChars ? value : chars.slice(0, maxChars).join('');
-  }
-
-  let count = 0;
-  let result = '';
-  for (const part of graphemeSegmenter.segment(value)) {
-    if (count >= maxChars) break;
-    result += part.segment;
-    count += 1;
-  }
-  return result;
-}
-
-function bufferToBase64(bytes: Uint8Array) {
-  return btoa(String.fromCharCode(...bytes));
-}
-
-function base64ToBytes(value: string) {
-  return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
-}
-
-function buildShareLink(id: string, key: string) {
-  if (!id || !key) return '';
-  if (typeof window === 'undefined') return `/${id}#${key}`;
-  return `${window.location.origin}/${id}#${key}`;
-}
-
-function parseRoute() {
-  if (typeof window === 'undefined') return { id: null, key: null };
-  const pathMatch = window.location.pathname.match(/^\/([A-Za-z0-9]+)$/);
-  let id = pathMatch ? pathMatch[1] : null;
-
-  const hash = window.location.hash;
-  let key: string | null = null;
-  if (hash && hash.length > 1) {
-    const raw = hash.substring(1);
-    if (raw.includes('=')) {
-      const params = new URLSearchParams(raw);
-      if (params.has('id')) id = params.get('id');
-      if (params.has('k')) key = params.get('k');
-    } else {
-      key = raw;
-    }
-  }
-
-  return { id, key };
-}
-
-async function deriveKeyFromPasscode(
-  passcode: string,
-  salt: Uint8Array,
-  usages: KeyUsage[],
-  iterations = KDF_ITERATIONS
-) {
-  const enc = new TextEncoder();
-  const saltBytes: Uint8Array<ArrayBuffer> = new Uint8Array(salt);
-  const keyMaterial = await window.crypto.subtle.importKey(
-    'raw',
-    enc.encode(normalizeKey(passcode)),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  return window.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    usages
-  );
-}
-
-async function encryptWithKey(text: string, key: CryptoKey) {
-  const enc = new TextEncoder();
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const cipher = await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    enc.encode(text)
-  );
-  return {
-    ciphertext: bufferToBase64(new Uint8Array(cipher)),
-    iv: bufferToBase64(iv),
-  };
-}
-
-async function decryptPayload(data: any, passcode: string) {
-  if (!data?.salt) throw new Error('Invalid data');
-  const salt = base64ToBytes(data.salt);
-  const iterations = data?.kdf?.iterations || KDF_ITERATIONS;
-  const key = await deriveKeyFromPasscode(passcode, salt, ['decrypt'], iterations);
-  const iv = base64ToBytes(data.iv);
-  const cipher = base64ToBytes(data.ciphertext);
-  const decrypted = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
-  return new TextDecoder().decode(decrypted);
-}
+import Header from './components/Header';
+import MemoEditor from './components/MemoEditor';
+import MemoViewer from './components/MemoViewer';
+import SharePanel from './components/SharePanel';
+import {
+  API_BASE,
+  ID_RE,
+  KDF_ITERATIONS,
+  KEY_MAX_LEN,
+  KEY_MIN_LEN,
+  MEMO_MAX_CHARS,
+  TTL_MS,
+} from './lib/constants';
+import {
+  clamp,
+  generateCustomId,
+  generateKeyString,
+  normalizeOptions,
+  type IdOptions,
+} from './lib/id';
+import { buildShareLink, parseRoute } from './lib/route';
+import { readBool, readNumber, readString } from './lib/storage';
+import { clampTextByChars, getCharCount } from './lib/text';
+import { bufferToBase64, decryptPayload, deriveKeyFromPasscode, encryptWithKey } from './lib/crypto';
+import { useShareStatus } from './hooks/useShareStatus';
+import type { ThemeClasses } from './types';
 
 const initialTheme = readString('memo-theme', 'classic');
 const initialIdLength = clamp(readNumber('memo-id-len', 4), KEY_MIN_LEN, KEY_MAX_LEN);
@@ -206,7 +38,6 @@ const initialOptions = normalizeOptions({
 export default function App() {
   const [theme, setTheme] = useState(initialTheme);
   const [memoText, setMemoText] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
   const [idLength, setIdLength] = useState(initialIdLength);
@@ -232,13 +63,13 @@ export default function App() {
   const [readPlaceholder, setReadPlaceholder] = useState('Unsealing memo...');
   const [isSharing, setIsSharing] = useState(false);
   const [lastSharedId, setLastSharedId] = useState<string | null>(null);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'active' | 'expired' | 'error'>('idle');
-  const [shareExpiresAt, setShareExpiresAt] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const { shareStatus, setShareStatus, shareExpiresAt, setShareExpiresAt, now } =
+    useShareStatus(lastSharedId);
+
   const lastRouteRef = useRef<string | null>(null);
   const lastSavedRef = useRef('');
 
-  const themeClasses = useMemo(() => {
+  const themeClasses: ThemeClasses = useMemo(() => {
     switch (theme) {
       case 'plain':
         return {
@@ -306,13 +137,6 @@ export default function App() {
     }
   }, [theme]);
 
-  const statusPillClass = useMemo(() => {
-    if (shareStatus === 'active') return themeClasses.statusActive;
-    if (shareStatus === 'expired') return themeClasses.statusExpired;
-    if (shareStatus === 'error') return themeClasses.statusError;
-    return themeClasses.statusIdle;
-  }, [shareStatus, themeClasses]);
-
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     window.localStorage.setItem('memo-theme', theme);
@@ -359,22 +183,12 @@ export default function App() {
     }
   }, [view]);
 
-  useEffect(() => {
-    if (view !== 'write') return;
-    const el = textareaRef.current;
-    if (!el) return;
-    const style = window.getComputedStyle(el);
-    const maxHeight = Number.parseFloat(style.maxHeight || '');
-    el.style.height = 'auto';
-    if (Number.isFinite(maxHeight)) {
-      const nextHeight = Math.min(el.scrollHeight, maxHeight);
-      el.style.height = `${nextHeight}px`;
-      el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
-    } else {
-      el.style.height = `${el.scrollHeight}px`;
-      el.style.overflowY = 'hidden';
-    }
-  }, [memoText, view]);
+  const handleSave = useCallback(() => {
+    const clipped = clampTextByChars(memoText, MEMO_MAX_CHARS);
+    window.localStorage.setItem('memo-draft', clipped);
+    lastSavedRef.current = clipped;
+    setIsDirty(false);
+  }, [memoText]);
 
   useEffect(() => {
     if (view !== 'write') return;
@@ -383,14 +197,7 @@ export default function App() {
       handleSave();
     }, 30000);
     return () => window.clearInterval(handle);
-  }, [memoText, isDirty, view]);
-
-  const handleSave = useCallback(() => {
-    const clipped = clampTextByChars(memoText, MEMO_MAX_CHARS);
-    window.localStorage.setItem('memo-draft', clipped);
-    lastSavedRef.current = clipped;
-    setIsDirty(false);
-  }, [memoText]);
+  }, [handleSave, isDirty, view]);
 
   const fetchAndDecrypt = useCallback(async (id: string, key: string) => {
     setReadContent('');
@@ -455,60 +262,6 @@ export default function App() {
       window.removeEventListener('popstate', handleRoute);
     };
   }, [fetchAndDecrypt]);
-
-  useEffect(() => {
-    if (!lastSharedId) {
-      setShareStatus('idle');
-      return;
-    }
-    if (shareStatus === 'expired') return;
-
-    let cancelled = false;
-    let intervalId: number | null = null;
-
-    const poll = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/${encodeURIComponent(lastSharedId)}`, {
-          method: 'HEAD',
-        });
-        if (cancelled) return;
-        if (res.status === 204) {
-          setShareStatus('active');
-          return;
-        }
-        if (res.status === 404) {
-          setShareStatus('expired');
-          if (intervalId) window.clearInterval(intervalId);
-          return;
-        }
-        setShareStatus('error');
-      } catch {
-        if (!cancelled) setShareStatus('error');
-      }
-    };
-
-    poll();
-    intervalId = window.setInterval(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, [lastSharedId, shareStatus]);
-
-  useEffect(() => {
-    if (shareStatus !== 'active' || !shareExpiresAt) return;
-    setNow(Date.now());
-    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(intervalId);
-  }, [shareStatus, shareExpiresAt]);
-
-  useEffect(() => {
-    if (shareStatus !== 'active' || !shareExpiresAt) return;
-    if (Date.now() >= shareExpiresAt) {
-      setShareStatus('expired');
-    }
-  }, [shareStatus, shareExpiresAt, now]);
 
   const handleOptionToggle = (key: keyof IdOptions, value: boolean) => {
     const next = normalizeOptions({
@@ -606,254 +359,59 @@ export default function App() {
   const remainingMs =
     shareStatus === 'active' && shareExpiresAt ? Math.max(0, shareExpiresAt - now) : null;
   const remainingText = remainingMs !== null ? formatDuration(remainingMs) : null;
-  const memoCharCount = useMemo(() => getCharCount(memoText), [memoText]);
 
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} ${themeClasses.text}`}>
       <div className="mx-auto flex h-screen w-full max-w-3xl flex-col px-5 pb-10 pt-5">
-        <header className="flex items-center justify-between py-2 font-ui">
-          <div className={`text-lg font-semibold tracking-tight ${themeClasses.brand}`}>
-            Memo Relay
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              id="theme-select"
-              className={`rounded border border-black/10 bg-transparent px-2 py-1 text-sm ${themeClasses.text}`}
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-            >
-              <option value="classic">Classic Yellow</option>
-              <option value="plain">Plain White</option>
-              <option value="dark">Blueprint Dark</option>
-            </select>
-          </div>
-        </header>
+        <Header theme={theme} onThemeChange={setTheme} themeClasses={themeClasses} />
 
         <main id="app" className="flex min-h-0 flex-1 flex-col">
           <section
             id="view-write"
             className={`${view === 'write' ? 'flex' : 'hidden'} relative min-h-0 flex-1 flex-col gap-5`}
           >
-            <div
-              className={`rounded-xl border border-black/5 p-5 shadow-sm transition ${themeClasses.panelBg} ${themeClasses.panelText}`}
-            >
-              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                <label>Share Link (Link ID)</label>
-                <div className="flex items-center gap-3">
-                  <button
-                    id="btn-save"
-                    className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40`}
-                    title="Save"
-                    onClick={handleSave}
-                    disabled={!isDirty}
-                  >
-                    <Save size={18} />
-                  </button>
-                  <button
-                    id="btn-share"
-                    className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40`}
-                    title="Share"
-                    onClick={handleShare}
-                    disabled={isSharing || shareStatus === 'active'}
-                  >
-                    <Share2 size={18} />
-                  </button>
-                  <button
-                    id="btn-refresh"
-                    className={`inline-flex items-center justify-center transition ${themeClasses.accent} hover:rotate-180`}
-                    title="Regenerate"
-                    onClick={handleRefresh}
-                  >
-                    <RefreshCcw size={18} />
-                  </button>
-                </div>
-              </div>
+            <SharePanel
+              themeClasses={themeClasses}
+              shareLink={shareLink}
+              isDirty={isDirty}
+              isSharing={isSharing}
+              shareStatus={shareStatus}
+              lastSharedId={lastSharedId}
+              remainingText={remainingText}
+              idLength={idLength}
+              keyLength={keyLength}
+              options={{ useNum, useLow, useUp }}
+              onSave={handleSave}
+              onShare={handleShare}
+              onRefresh={handleRefresh}
+              onIdLengthChange={(value) =>
+                setIdLength(clamp(value, KEY_MIN_LEN, KEY_MAX_LEN))
+              }
+              onKeyLengthChange={(value) =>
+                setKeyLength(clamp(value, KEY_MIN_LEN, KEY_MAX_LEN))
+              }
+              onOptionToggle={handleOptionToggle}
+            />
 
-              <div className="mt-3 flex items-center gap-3 rounded-lg border border-black/10 bg-black/5 px-4 py-2">
-                <input
-                  type="text"
-                  id="id-input"
-                  className={`flex-1 bg-transparent font-mono text-sm tracking-wide outline-none ${themeClasses.text}`}
-                  spellCheck={false}
-                  value={shareLink}
-                  readOnly
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-ui text-neutral-500">
-                <span>Status:</span>
-                {lastSharedId ? (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] uppercase ${statusPillClass}`}>
-                    {shareStatus}
-                  </span>
-                ) : (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] uppercase ${themeClasses.statusIdle}`}>
-                    Not shared
-                  </span>
-                )}
-                <span className="text-neutral-400">•</span>
-                {shareStatus === 'active' && remainingText ? (
-                  <span>Expires in {remainingText}</span>
-                ) : (
-                  <span>TTL: {TTL_MINUTES} min</span>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-20 text-sm text-neutral-500">
-                    Length: <span className={themeClasses.accent}>{idLength}</span>
-                  </span>
-                  <input
-                    type="range"
-                    id="opt-len"
-                    min={KEY_MIN_LEN}
-                    max={KEY_MAX_LEN}
-                    value={idLength}
-                    className={`w-32 ${themeClasses.accentInput}`}
-                    onChange={(e) =>
-                      setIdLength(clamp(Number(e.target.value), KEY_MIN_LEN, KEY_MAX_LEN))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-20 text-sm text-neutral-500">
-                    Key: <span className={themeClasses.accent}>{keyLength}</span>
-                  </span>
-                  <input
-                    type="range"
-                    id="opt-key-len"
-                    min={KEY_MIN_LEN}
-                    max={KEY_MAX_LEN}
-                    value={keyLength}
-                    className={`w-32 ${themeClasses.accentInput}`}
-                    onChange={(e) =>
-                      setKeyLength(clamp(Number(e.target.value), KEY_MIN_LEN, KEY_MAX_LEN))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      id="opt-num"
-                      checked={useNum}
-                      onChange={(e) => handleOptionToggle('useNum', e.target.checked)}
-                      className="sr-only"
-                    />
-                    <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useNum
-                          ? `${themeClasses.accentBg} text-white border-transparent`
-                          : 'border-black/10 text-neutral-500'
-                        }`}
-                    >
-                      123
-                    </span>
-                  </label>
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      id="opt-low"
-                      checked={useLow}
-                      onChange={(e) => handleOptionToggle('useLow', e.target.checked)}
-                      className="sr-only"
-                    />
-                    <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useLow
-                          ? `${themeClasses.accentBg} text-white border-transparent`
-                          : 'border-black/10 text-neutral-500'
-                        }`}
-                    >
-                      abc
-                    </span>
-                  </label>
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      id="opt-up"
-                      checked={useUp}
-                      onChange={(e) => handleOptionToggle('useUp', e.target.checked)}
-                      className="sr-only"
-                    />
-                    <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useUp
-                          ? `${themeClasses.accentBg} text-white border-transparent`
-                          : 'border-black/10 text-neutral-500'
-                        }`}
-                    >
-                      ABC
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={`relative max-h-[calc(100vh-260px)] overflow-hidden rounded-sm border border-black/5 shadow-lg ${themeClasses.paperBg} ${themeClasses.line} bg-[length:100%_2.4rem] bg-local ${themeClasses.marginLine} before:absolute before:inset-y-0 before:left-12 before:w-px before:content-['']`}
-            >
-              <textarea
-                id="memo-input"
-                className={`w-full min-h-56 max-h-[calc(100vh-260px)] resize-none bg-transparent px-8 py-2 pl-16 font-body text-lg leading-10 outline-none ${themeClasses.text}`}
-                placeholder="Start writing..."
-                spellCheck={false}
-                value={memoText}
-                ref={textareaRef}
-                onChange={(e) => {
-                  const nextValue = clampTextByChars(e.target.value, MEMO_MAX_CHARS);
-                  setMemoText(nextValue);
-                  setIsDirty(nextValue !== lastSavedRef.current);
-                }}
-              />
-            </div>
-            <div className="flex justify-end text-xs font-ui text-neutral-500">
-              {memoCharCount}/{MEMO_MAX_CHARS} chars
-            </div>
-
+            <MemoEditor
+              themeClasses={themeClasses}
+              memoText={memoText}
+              setMemoText={setMemoText}
+              setIsDirty={setIsDirty}
+              lastSavedValue={lastSavedRef.current}
+              view={view}
+            />
           </section>
 
-          <section
-            id="view-read"
-            className={`${view === 'read' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col gap-4`}
-          >
-            <div
-              className={`relative max-h-[calc(100vh-260px)] overflow-hidden rounded-sm border border-black/5 shadow-lg ${themeClasses.paperBg} ${themeClasses.line} bg-[length:100%_2.4rem] bg-local ${themeClasses.marginLine} before:absolute before:inset-y-0 before:left-12 before:w-px before:content-['']`}
-            >
-              {!readError && readContent && (
-                <div
-                  id="read-content"
-                  className={`w-full min-h-56 max-h-[calc(100vh-260px)] whitespace-pre-wrap bg-transparent px-8 py-2 pl-16 font-body text-lg leading-10 ${themeClasses.text}`}
-                >
-                  {readContent}
-                </div>
-              )}
-              {!readError && !readContent && (
-                <div
-                  id="read-placeholder"
-                  className="flex min-h-56 items-center justify-center px-8 py-2 text-center text-sm italic text-neutral-400"
-                >
-                  <p>{readPlaceholder}</p>
-                </div>
-              )}
-              {readError && (
-                <div
-                  id="read-error"
-                  className="flex min-h-56 flex-col items-center justify-center gap-2 px-8 py-2 text-center text-sm text-orange-400"
-                >
-                  <h3 className="text-base font-semibold">Unavailable</h3>
-                  <p>This page has been torn out.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pr-8 pb-6">
-              <button
-                id="btn-new"
-                className={`rounded border border-black/10 px-4 py-2 text-sm font-ui ${themeClasses.text}`}
-                onClick={() => (window.location.href = '/')}
-              >
-                Write New Memo
-              </button>
-            </div>
-          </section>
+          {view === 'read' ? (
+            <MemoViewer
+              themeClasses={themeClasses}
+              readContent={readContent}
+              readError={readError}
+              readPlaceholder={readPlaceholder}
+              onWriteNew={() => (window.location.href = '/')}
+            />
+          ) : null}
         </main>
       </div>
     </div>

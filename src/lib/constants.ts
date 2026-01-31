@@ -1,0 +1,9 @@
+export const API_BASE = '/api/memo';
+export const ID_RE = /^[A-Za-z0-9]{4,32}$/;
+export const KEY_MIN_LEN = 4;
+export const KEY_MAX_LEN = 32;
+export const KDF_ITERATIONS = 100000;
+export const TTL_MINUTES = 30;
+export const TTL_MS = TTL_MINUTES * 60 * 1000;
+export const POLL_INTERVAL_MS = 5000;
+export const MEMO_MAX_CHARS = 2000;
