@@ -360,6 +360,26 @@ export default function App() {
     shareStatus === 'active' && shareExpiresAt ? Math.max(0, shareExpiresAt - now) : null;
   const remainingText = remainingMs !== null ? formatDuration(remainingMs) : null;
 
+  useEffect(() => {
+    if (shareStatus !== 'expired') return;
+    const nextId = generateCustomId(idLength, { useNum, useLow, useUp });
+    const nextKey = generateKeyString(keyLength, { useNum, useLow, useUp });
+    setGeneratedId(nextId);
+    setKeyString(nextKey);
+    setLastSharedId(null);
+    setShareExpiresAt(null);
+    setShareStatus('idle');
+  }, [
+    shareStatus,
+    idLength,
+    keyLength,
+    useNum,
+    useLow,
+    useUp,
+    setShareExpiresAt,
+    setShareStatus,
+  ]);
+
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} ${themeClasses.text}`}>
       <div className="mx-auto flex h-screen w-full max-w-3xl flex-col px-5 pb-10 pt-5">
