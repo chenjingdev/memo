@@ -9,6 +9,7 @@ const KDF_ITERATIONS = 100000;
 const TTL_MINUTES = 30;
 const TTL_MS = TTL_MINUTES * 60 * 1000;
 const POLL_INTERVAL_MS = 5000;
+const MEMO_MAX_CHARS = 2000;
 
 type IdOptions = {
   useNum: boolean;
@@ -72,6 +73,43 @@ function normalizeKey(input: string) {
   return (input || '').replace(/[^A-Za-z0-9]/g, '');
 }
 
+type GraphemeSegmenter = {
+  segment: (input: string) => Iterable<{ segment: string }>;
+};
+
+const graphemeSegmenter: GraphemeSegmenter | null = (() => {
+  if (typeof Intl === 'undefined') return null
+  const Segmenter = (Intl as { Segmenter?: new (...args: any[]) => GraphemeSegmenter }).Segmenter;
+  return Segmenter ? new Segmenter(undefined, { granularity: 'grapheme' }) : null;
+})();
+
+function getCharCount(value: string) {
+  if (!value) return 0;
+  if (!graphemeSegmenter) return Array.from(value).length;
+  let count = 0;
+  for (const _ of graphemeSegmenter.segment(value)) {
+    count += 1;
+  }
+  return count;
+}
+
+function clampTextByChars(value: string, maxChars: number) {
+  if (!value) return value;
+  if (!graphemeSegmenter) {
+    const chars = Array.from(value);
+    return chars.length <= maxChars ? value : chars.slice(0, maxChars).join('');
+  }
+
+  let count = 0;
+  let result = '';
+  for (const part of graphemeSegmenter.segment(value)) {
+    if (count >= maxChars) break;
+    result += part.segment;
+    count += 1;
+  }
+  return result;
+}
+
 function bufferToBase64(bytes: Uint8Array) {
   return btoa(String.fromCharCode(...bytes));
 }
@@ -114,6 +152,7 @@ async function deriveKeyFromPasscode(
   iterations = KDF_ITERATIONS
 ) {
   const enc = new TextEncoder();
+  const saltBytes: Uint8Array<ArrayBuffer> = new Uint8Array(salt);
   const keyMaterial = await window.crypto.subtle.importKey(
     'raw',
     enc.encode(normalizeKey(passcode)),
@@ -122,7 +161,7 @@ async function deriveKeyFromPasscode(
     ['deriveKey']
   );
   return window.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -313,8 +352,9 @@ export default function App() {
     if (view !== 'write') return;
     const saved = window.localStorage.getItem('memo-draft');
     if (saved !== null) {
-      setMemoText(saved);
-      lastSavedRef.current = saved;
+      const clipped = clampTextByChars(saved, MEMO_MAX_CHARS);
+      setMemoText(clipped);
+      lastSavedRef.current = clipped;
       setIsDirty(false);
     }
   }, [view]);
@@ -346,8 +386,9 @@ export default function App() {
   }, [memoText, isDirty, view]);
 
   const handleSave = useCallback(() => {
-    window.localStorage.setItem('memo-draft', memoText);
-    lastSavedRef.current = memoText;
+    const clipped = clampTextByChars(memoText, MEMO_MAX_CHARS);
+    window.localStorage.setItem('memo-draft', clipped);
+    lastSavedRef.current = clipped;
     setIsDirty(false);
   }, [memoText]);
 
@@ -490,6 +531,10 @@ export default function App() {
       console.warn('Share blocked: empty memo');
       return;
     }
+    if (getCharCount(memoText) > MEMO_MAX_CHARS) {
+      console.warn('Share blocked: memo too long');
+      return;
+    }
     const apiOk = await checkApiHealth();
     if (!apiOk) {
       console.warn('Share blocked: API unavailable');
@@ -561,6 +606,7 @@ export default function App() {
   const remainingMs =
     shareStatus === 'active' && shareExpiresAt ? Math.max(0, shareExpiresAt - now) : null;
   const remainingText = remainingMs !== null ? formatDuration(remainingMs) : null;
+  const memoCharCount = useMemo(() => getCharCount(memoText), [memoText]);
 
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} ${themeClasses.text}`}>
@@ -570,16 +616,16 @@ export default function App() {
             Memo Relay
           </div>
           <div className="flex items-center gap-3">
-          <select
-            id="theme-select"
-            className={`rounded border border-black/10 bg-transparent px-2 py-1 text-sm ${themeClasses.text}`}
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-          >
-            <option value="classic">Classic Yellow</option>
-            <option value="plain">Plain White</option>
-            <option value="dark">Blueprint Dark</option>
-          </select>
+            <select
+              id="theme-select"
+              className={`rounded border border-black/10 bg-transparent px-2 py-1 text-sm ${themeClasses.text}`}
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+            >
+              <option value="classic">Classic Yellow</option>
+              <option value="plain">Plain White</option>
+              <option value="dark">Blueprint Dark</option>
+            </select>
           </div>
         </header>
 
@@ -624,15 +670,15 @@ export default function App() {
               </div>
 
               <div className="mt-3 flex items-center gap-3 rounded-lg border border-black/10 bg-black/5 px-4 py-2">
-              <input
-                type="text"
-                id="id-input"
-                className={`flex-1 bg-transparent font-mono text-sm tracking-wide outline-none ${themeClasses.text}`}
-                spellCheck={false}
-                value={shareLink}
-                readOnly
-              />
-            </div>
+                <input
+                  type="text"
+                  id="id-input"
+                  className={`flex-1 bg-transparent font-mono text-sm tracking-wide outline-none ${themeClasses.text}`}
+                  spellCheck={false}
+                  value={shareLink}
+                  readOnly
+                />
+              </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-ui text-neutral-500">
                 <span>Status:</span>
                 {lastSharedId ? (
@@ -695,11 +741,10 @@ export default function App() {
                       className="sr-only"
                     />
                     <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                        useNum
+                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useNum
                           ? `${themeClasses.accentBg} text-white border-transparent`
                           : 'border-black/10 text-neutral-500'
-                      }`}
+                        }`}
                     >
                       123
                     </span>
@@ -713,11 +758,10 @@ export default function App() {
                       className="sr-only"
                     />
                     <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                        useLow
+                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useLow
                           ? `${themeClasses.accentBg} text-white border-transparent`
                           : 'border-black/10 text-neutral-500'
-                      }`}
+                        }`}
                     >
                       abc
                     </span>
@@ -731,11 +775,10 @@ export default function App() {
                       className="sr-only"
                     />
                     <span
-                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
-                        useUp
+                      className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${useUp
                           ? `${themeClasses.accentBg} text-white border-transparent`
                           : 'border-black/10 text-neutral-500'
-                      }`}
+                        }`}
                     >
                       ABC
                     </span>
@@ -755,10 +798,14 @@ export default function App() {
                 value={memoText}
                 ref={textareaRef}
                 onChange={(e) => {
-                  setMemoText(e.target.value);
-                  setIsDirty(e.target.value !== lastSavedRef.current);
+                  const nextValue = clampTextByChars(e.target.value, MEMO_MAX_CHARS);
+                  setMemoText(nextValue);
+                  setIsDirty(nextValue !== lastSavedRef.current);
                 }}
               />
+            </div>
+            <div className="flex justify-end text-xs font-ui text-neutral-500">
+              {memoCharCount}/{MEMO_MAX_CHARS} chars
             </div>
 
           </section>

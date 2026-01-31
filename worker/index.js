@@ -2,6 +2,11 @@ const ID_RE = /^[A-Za-z0-9]+$/;
 const ID_MIN_LEN = 4;
 const ID_MAX_LEN = 32;
 const TTL_SECONDS = 30 * 60;
+const MEMO_MAX_BYTES = 10000;
+const AES_GCM_TAG_BYTES = 16;
+const IV_BYTES = 12;
+const SALT_BYTES = 16;
+const MAX_CIPHERTEXT_BYTES = MEMO_MAX_BYTES + AES_GCM_TAG_BYTES;
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -40,6 +45,16 @@ function withCors(response) {
     });
 }
 
+function base64ByteLength(value) {
+    if (typeof value !== "string") return null;
+    if (value.length % 4 !== 0) return null;
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return null;
+    let padding = 0;
+    if (value.endsWith("==")) padding = 2;
+    else if (value.endsWith("=")) padding = 1;
+    return (value.length * 3) / 4 - padding;
+}
+
 export class MemoRelayDO {
     constructor(state, env) {
         this.state = state;
@@ -68,6 +83,24 @@ export class MemoRelayDO {
 
             if (!data?.ciphertext || !data?.iv || !data?.salt) {
                 return jsonResponse({ error: "Missing ciphertext, iv, or salt" }, 400);
+            }
+            if (typeof data.ciphertext !== "string" || typeof data.iv !== "string" || typeof data.salt !== "string") {
+                return jsonResponse({ error: "Invalid ciphertext, iv, or salt" }, 400);
+            }
+            const ivBytes = base64ByteLength(data.iv);
+            if (ivBytes !== IV_BYTES) {
+                return jsonResponse({ error: "Invalid iv" }, 400);
+            }
+            const saltBytes = base64ByteLength(data.salt);
+            if (saltBytes !== SALT_BYTES) {
+                return jsonResponse({ error: "Invalid salt" }, 400);
+            }
+            const cipherBytes = base64ByteLength(data.ciphertext);
+            if (!Number.isFinite(cipherBytes)) {
+                return jsonResponse({ error: "Invalid ciphertext" }, 400);
+            }
+            if (cipherBytes > MAX_CIPHERTEXT_BYTES) {
+                return jsonResponse({ error: "Memo too large" }, 413);
             }
 
             const existing = await this.state.storage.get("memo");
