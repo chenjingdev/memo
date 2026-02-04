@@ -1,4 +1,5 @@
-import { RefreshCcw, Save, Share2 } from 'lucide-react';
+import { RefreshCcw, Save, Link, Copy, Check } from 'lucide-react';
+import { useState } from 'react';
 import type { IdOptions } from '../lib/id';
 import { KEY_MAX_LEN, KEY_MIN_LEN, MEMO_MAX_CHARS, TTL_MINUTES } from '../lib/constants';
 import type { ShareStatus, ThemeClasses } from '../types';
@@ -40,6 +41,36 @@ export default function SharePanel({
   onKeyLengthChange,
   onOptionToggle,
 }: Props) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    if (!shareLink || !lastSharedId) return;
+    try {
+      // 동기적으로 실행 (사용자 클릭 직후)
+      const temp = document.createElement('textarea');
+      temp.value = shareLink;
+      temp.setAttribute('readonly', '');
+      temp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(temp);
+      temp.select();
+      temp.setSelectionRange(0, 999999);
+      document.execCommand('copy');
+      temp.remove();
+      
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback to clipboard API
+      try {
+        await navigator.clipboard.writeText(shareLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Copy failed', err);
+      }
+    }
+  };
+  
   const statusPillClass =
     shareStatus === 'active'
       ? themeClasses.statusActive
@@ -68,11 +99,11 @@ export default function SharePanel({
           <button
             id="btn-share"
             className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
-            title="Share"
+            title="Generate Link"
             onClick={onShare}
             disabled={isSharing || isDirty}
           >
-            <Share2 size={18} />
+            <Link size={18} />
           </button>
           <button
             id="btn-refresh"
@@ -85,7 +116,7 @@ export default function SharePanel({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-3 rounded-lg border border-black/10 bg-black/5 px-4 py-2">
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-black/10 bg-black/5 px-4 py-2">
         <input
           type="text"
           id="id-input"
@@ -94,6 +125,21 @@ export default function SharePanel({
           value={shareLink}
           readOnly
         />
+        <button
+          onClick={handleCopy}
+          disabled={!lastSharedId}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+            lastSharedId
+              ? copied
+                ? 'bg-green-500 text-white'
+                : `${themeClasses.accentBg} text-white hover:opacity-90 cursor-pointer`
+              : 'bg-black/10 text-neutral-400 cursor-not-allowed'
+          }`}
+          title="Copy to clipboard"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          <span>{copied ? 'Copied!' : 'Copy'}</span>
+        </button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-ui text-neutral-500">
         <span>Status:</span>

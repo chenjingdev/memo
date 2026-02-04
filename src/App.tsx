@@ -351,6 +351,7 @@ export default function App() {
       return;
     }
     setIsSharing(true);
+    
     try {
       // Burn previous shared memo if exists
       if (lastSharedId) {
@@ -408,15 +409,11 @@ export default function App() {
 
         setGeneratedId(candidateId);
         setKeyString(candidateKey);
-        const link = buildShareLink(candidateId, candidateKey);
-        const copied = await copyToClipboard(link);
-        if (copied) {
-          setToastMessage('Link copied to clipboard!');
-          setTimeout(() => setToastMessage(null), 2000);
-        }
         setLastSharedId(candidateId);
         setShareStatus('active');
         setShareExpiresAt(Date.now() + TTL_MS);
+        setToastMessage('Link generated! Click Copy to share.');
+        setTimeout(() => setToastMessage(null), 2500);
         return;
       }
 
@@ -531,33 +528,6 @@ export default function App() {
       )}
     </div>
   );
-}
-
-async function copyToClipboard(text: string) {
-  if (!text) return false;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // fall back to execCommand
-  }
-  try {
-    const temp = document.createElement('textarea');
-    temp.value = text;
-    temp.setAttribute('readonly', '');
-    temp.style.position = 'absolute';
-    temp.style.left = '-9999px';
-    document.body.appendChild(temp);
-    temp.select();
-    temp.setSelectionRange(0, temp.value.length);
-    const ok = document.execCommand('copy');
-    temp.remove();
-    return ok;
-  } catch {
-    return false;
-  }
 }
 
 function formatDuration(ms: number) {
