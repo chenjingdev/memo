@@ -70,7 +70,7 @@ export default function SharePanel({
             className={`inline-flex items-center justify-center transition ${themeClasses.accent} disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
             title="Share"
             onClick={onShare}
-            disabled={isSharing || shareStatus === 'active'}
+            disabled={isSharing || isDirty}
           >
             <Share2 size={18} />
           </button>

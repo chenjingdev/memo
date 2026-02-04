@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
+import AdBanner from './components/AdBanner';
 import Header from './components/Header';
 import MemoEditor from './components/MemoEditor';
 import MemoViewer from './components/MemoViewer';
@@ -66,6 +67,7 @@ export default function App() {
   const [readPlaceholder, setReadPlaceholder] = useState('Unsealing memo...');
   const [isSharing, setIsSharing] = useState(false);
   const [lastSharedId, setLastSharedId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const { shareStatus, setShareStatus, shareExpiresAt, setShareExpiresAt, now } =
     useShareStatus(lastSharedId);
 
@@ -350,8 +352,18 @@ export default function App() {
     }
     setIsSharing(true);
     try {
-      let candidateId = generatedId;
-      let candidateKey = keyString;
+      // Burn previous shared memo if exists
+      if (lastSharedId) {
+        await burnMemo(lastSharedId);
+        setLastSharedId(null);
+        setShareStatus('idle');
+        setShareExpiresAt(null);
+      }
+
+      let candidateId = generateCustomId(idLength, { useNum, useLow, useUp });
+      let candidateKey = generateKeyString(keyLength, { useNum, useLow, useUp });
+      setGeneratedId(candidateId);
+      setKeyString(candidateKey);
       const maxAttempts = 5;
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -397,7 +409,11 @@ export default function App() {
         setGeneratedId(candidateId);
         setKeyString(candidateKey);
         const link = buildShareLink(candidateId, candidateKey);
-        await copyToClipboard(link);
+        const copied = await copyToClipboard(link);
+        if (copied) {
+          setToastMessage('Link copied to clipboard!');
+          setTimeout(() => setToastMessage(null), 2000);
+        }
         setLastSharedId(candidateId);
         setShareStatus('active');
         setShareExpiresAt(Date.now() + TTL_MS);
@@ -435,6 +451,13 @@ export default function App() {
 
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} ${themeClasses.text}`}>
+      {/* Top Banner Ad */}
+      <AdBanner 
+        slot="YOUR_AD_SLOT_ID" 
+        format="horizontal" 
+        className="w-full" 
+      />
+      
       <div className="mx-auto flex h-screen w-full max-w-3xl flex-col px-5 pb-10 pt-5">
         <Header theme={theme} onThemeChange={setTheme} themeClasses={themeClasses} />
 
@@ -497,6 +520,15 @@ export default function App() {
           </p>
         </footer>
       </div>
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div className="fixed top-6 left-1/2 z-50 -translate-x-1/2 animate-slide-down">
+          <div className={`rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg backdrop-blur-sm ${themeClasses.stamp}`}>
+            {toastMessage}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

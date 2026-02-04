@@ -1,20 +1,291 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Memo Relay</title>
-  <meta name="description" content="Secure, one-time notebook." />
+  
+  <!-- Primary Meta Tags -->
+  <title>Memo Relay - 안전한 일회성 메모 공유 서비스</title>
+  <meta name="title" content="Memo Relay - 안전한 일회성 메모 공유 서비스" />
+  <meta name="description" content="종단간 암호화된 일회성 메모 공유. 비밀번호, 메시지, 민감한 정보를 안전하게 전달하세요. 읽으면 자동 삭제됩니다." />
+  <meta name="keywords" content="메모 공유, 일회성 메모, 암호화 메모, 비밀 메시지, 보안 메모, 자동 삭제 메모, 안전한 공유, E2E 암호화" />
+  <meta name="author" content="Memo Relay" />
+  <meta name="robots" content="index, follow" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://memo.chenjing.me/" />
+  <meta property="og:title" content="Memo Relay - 안전한 일회성 메모 공유" />
+  <meta property="og:description" content="종단간 암호화된 일회성 메모 공유. 비밀번호, 메시지, 민감한 정보를 안전하게 전달하세요." />
+  <meta property="og:image" content="https://memo.chenjing.me/og-image.png" />
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="https://memo.chenjing.me/" />
+  <meta property="twitter:title" content="Memo Relay - 안전한 일회성 메모 공유" />
+  <meta property="twitter:description" content="종단간 암호화된 일회성 메모 공유. 비밀번호, 메시지, 민감한 정보를 안전하게 전달하세요." />
+  <meta property="twitter:image" content="https://memo.chenjing.me/og-image.png" />
+  
+  <!-- Google AdSense Site Verification -->
+  <meta name="google-adsense-account" content="ca-pub-2510187601795083">
+  
   <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="canonical" href="https://memo.chenjing.me/" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap"
     rel="stylesheet" />
+  
+  <!-- Google AdSense -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2510187601795083"
+    crossorigin="anonymous"></script>
+    
+  <!-- Structured Data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Memo Relay",
+    "description": "종단간 암호화된 일회성 메모 공유 서비스. 비밀번호, 메시지, 민감한 정보를 안전하게 전달하세요.",
+    "url": "https://memo.chenjing.me",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "KRW"
+    },
+    "featureList": [
+      "종단간 암호화",
+      "일회성 메모",
+      "자동 삭제",
+      "비밀번호 공유"
+    ]
+  }
+  </script>
+  
+  <style>
+    #about-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+    }
+    #about-modal.open { display: flex; align-items: center; justify-content: center; }
+    #about-modal article {
+      background: #fffdf0;
+      max-width: 520px;
+      width: 90%;
+      max-height: 85vh;
+      overflow-y: auto;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      font-family: 'Crimson Pro', serif;
+      color: #2d3436;
+      line-height: 1.7;
+      position: relative;
+    }
+    [data-theme="dark"] #about-modal article {
+      background: #2f3640;
+      color: #dcdde1;
+    }
+    #about-modal h1 { font-size: 1.5rem; margin: 0 0 16px; font-weight: 600; }
+    #about-modal h2 { font-size: 1.1rem; margin: 20px 0 8px; font-weight: 600; }
+    #about-modal p { margin: 0 0 12px; }
+    #about-modal ul, #about-modal ol { margin: 0 0 12px; padding-left: 20px; }
+    #about-modal li { margin: 4px 0; }
+    #about-modal a { color: #0984e3; }
+    [data-theme="dark"] #about-modal a { color: #74b9ff; }
+    #about-modal .close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.7;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #about-modal .close-btn:hover { opacity: 1; }
+    #about-modal .lang-switch {
+      position: absolute;
+      top: 12px;
+      right: 48px;
+      display: flex;
+      gap: 4px;
+    }
+    #about-modal .lang-btn {
+      background: none;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.5;
+      color: inherit;
+    }
+    #about-modal .lang-btn.active { opacity: 1; font-weight: bold; }
+    #about-modal .lang-btn:hover { opacity: 0.8; }
+    .content-ko, .content-en { display: none; }
+    .content-ko.active, .content-en.active { display: block; }
+    #about-trigger {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #2d3436;
+      color: white;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+    #about-trigger:hover { transform: scale(1.1); }
+    [data-theme="dark"] #about-trigger { background: #74b9ff; color: #0f172a; }
+  </style>
+  
+  <script>
+    function setAboutLang(lang) {
+      document.querySelectorAll('.content-ko, .content-en').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.content-' + lang).forEach(el => el.classList.add('active'));
+      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelector('.lang-btn[data-lang="' + lang + '"]').classList.add('active');
+      localStorage.setItem('about-lang', lang);
+    }
+    function initAboutLang() {
+      const saved = localStorage.getItem('about-lang');
+      if (saved) return setAboutLang(saved);
+      const browserLang = navigator.language || navigator.userLanguage || 'en';
+      setAboutLang(browserLang.startsWith('ko') ? 'ko' : 'en');
+    }
+  </script>
 </head>
 
-<body>
+<body onload="initAboutLang()">
+  <!-- About Modal (하드코딩 - SEO & 실제 콘텐츠) -->
+  <div id="about-modal" onclick="if(event.target===this)this.classList.remove('open')">
+    <article>
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="ko" onclick="setAboutLang('ko')">한국어</button>
+        <button class="lang-btn" data-lang="en" onclick="setAboutLang('en')">EN</button>
+      </div>
+      <button class="close-btn" onclick="document.getElementById('about-modal').classList.remove('open')">&times;</button>
+      
+      <!-- 한국어 콘텐츠 -->
+      <div class="content-ko">
+        <h1>📝 Memo Relay</h1>
+        <p><strong>안전한 일회성 메모 공유 서비스</strong></p>
+        
+        <h2>왜 만들었나요?</h2>
+        <p>
+          VM으로 격리된 컴퓨터에 비밀번호나 API 키 같은 민감한 정보를 전달하고 싶었습니다. 
+          클립보드 공유도 안 되고, 이메일로 보내자니 찝찝하고... 
+          그래서 <strong>읽으면 바로 삭제되는</strong> 암호화된 메모 공유 서비스를 만들었습니다.
+        </p>
+        <p>저 같은 필요를 가진 분들이 분명 있을 거라 생각합니다. 🙂</p>
+        
+        <h2>사용 방법</h2>
+        <ol>
+          <li>📝 메모 영역에 공유할 내용을 작성합니다</li>
+          <li>💾 저장 버튼(디스크 아이콘)으로 로컬에 임시 저장됩니다</li>
+          <li>🔗 공유 버튼을 누르면 암호화된 링크가 생성되고 클립보드에 복사됩니다</li>
+          <li>📨 링크를 상대방에게 전달합니다</li>
+          <li>🔥 상대방이 링크를 열면 메모 확인 후 서버에서 자동 삭제!</li>
+        </ol>
+        
+        <h2>주요 기능</h2>
+        <ul>
+          <li>🔐 <strong>종단간 암호화(E2E)</strong> - 서버도 내용을 읽을 수 없습니다</li>
+          <li>🔥 <strong>일회성 공유</strong> - 읽으면 자동으로 삭제됩니다</li>
+          <li>⏰ <strong>자동 만료</strong> - 시간이 지나면 자동 삭제</li>
+          <li>🎨 <strong>테마 지원</strong> - Classic, Plain, Dark 테마 선택 가능</li>
+          <li>⚙️ <strong>링크 커스텀</strong> - ID 길이, 암호 길이, 문자 종류 조절 가능</li>
+        </ul>
+        
+        <h2>활용 사례</h2>
+        <ul>
+          <li>🖥️ VM/격리된 환경으로 비밀번호 전달</li>
+          <li>🤖 <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener">OpenClaw</a> 같은 AI 어시스턴트에 민감한 정보 전달</li>
+          <li>🔑 일회용 API 키, 토큰 공유</li>
+          <li>📱 PC ↔ 모바일 간 민감한 정보 이동</li>
+        </ul>
+        
+        <h2>오픈소스</h2>
+        <p>
+          이 프로젝트는 오픈소스입니다.<br>
+          <a href="https://github.com/chenjing/memo" target="_blank" rel="noopener">🐙 GitHub에서 소스코드 보기</a>
+        </p>
+      </div>
+      
+      <!-- English Content -->
+      <div class="content-en">
+        <h1>📝 Memo Relay</h1>
+        <p><strong>Secure, One-Time Memo Sharing Service</strong></p>
+        
+        <h2>Why I Built This</h2>
+        <p>
+          I needed to transfer sensitive information like passwords and API keys to VMs or isolated environments. 
+          Clipboard sharing doesn't work, and email feels insecure... 
+          So I built an encrypted memo service that <strong>self-destructs after reading</strong>.
+        </p>
+        <p>I'm sure there are others with the same need. 🙂</p>
+        
+        <h2>How to Use</h2>
+        <ol>
+          <li>📝 Write your content in the memo area</li>
+          <li>💾 Click the save button (disk icon) to save locally</li>
+          <li>🔗 Click share to generate an encrypted link (copied to clipboard)</li>
+          <li>📨 Send the link to the recipient</li>
+          <li>🔥 Once they open it, the memo is shown and auto-deleted from server!</li>
+        </ol>
+        
+        <h2>Key Features</h2>
+        <ul>
+          <li>🔐 <strong>End-to-End Encryption</strong> - Server cannot read your content</li>
+          <li>🔥 <strong>One-Time Share</strong> - Auto-deletes after reading</li>
+          <li>⏰ <strong>Auto-Expiry</strong> - Deletes after timeout</li>
+          <li>🎨 <strong>Themes</strong> - Classic, Plain, Dark themes available</li>
+          <li>⚙️ <strong>Customizable Links</strong> - Adjust ID length, key length, character types</li>
+        </ul>
+        
+        <h2>Use Cases</h2>
+        <ul>
+          <li>🖥️ Transfer passwords to VMs/isolated environments</li>
+          <li>🤖 Share sensitive info with AI assistants like <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener">OpenClaw</a></li>
+          <li>🔑 Share one-time API keys and tokens</li>
+          <li>📱 Move sensitive data between PC and mobile</li>
+        </ul>
+        
+        <h2>Open Source</h2>
+        <p>
+          This project is open source.<br>
+          <a href="https://github.com/chenjing/memo" target="_blank" rel="noopener">🐙 View source code on GitHub</a>
+        </p>
+      </div>
+    </article>
+  </div>
+  
+  <!-- About 버튼 -->
+  <button id="about-trigger" onclick="document.getElementById('about-modal').classList.add('open')" title="About">?</button>
+  
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
