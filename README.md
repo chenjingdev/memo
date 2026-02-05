@@ -5,6 +5,7 @@
 
 ## 주요 기능
 - 클라이언트 측 암호화(PBKDF2 + AES-GCM), 키는 URL 해시에만 존재
+  - 📖 [암호화 알고리즘 상세 설명](ENCRYPTION.md) | [Encryption Details (EN)](ENCRYPTION_EN.md)
 - 1회 열람 후 즉시 파기(burn after GET)
 - TTL 만료(기본 30분)
 - 공유 상태 폴링
